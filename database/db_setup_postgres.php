@@ -38,7 +38,7 @@ try {
 
     // Step 3 – Create items table
     $conn->exec("
-        CREATE TABLE IF NOT EXISTS lost.items (
+        CREATE TABLE IF NOT EXISTS items (
             id             SERIAL       PRIMARY KEY,
             item_type      VARCHAR(10)  NOT NULL CHECK (item_type IN ('lost','found')),
             item_name      VARCHAR(100) NOT NULL,
@@ -61,20 +61,20 @@ try {
 
     // Step 4 – Create indexes
     $indexes = [
-        "CREATE INDEX IF NOT EXISTS idx_item_type     ON lost.items(item_type)",
-        "CREATE INDEX IF NOT EXISTS idx_status        ON lost.items(status)",
-        "CREATE INDEX IF NOT EXISTS idx_category      ON lost.items(category)",
-        "CREATE INDEX IF NOT EXISTS idx_item_name     ON lost.items(item_name)",
-        "CREATE INDEX IF NOT EXISTS idx_date_reported ON lost.items(date_reported)",
+        "CREATE INDEX IF NOT EXISTS idx_item_type     ON items(item_type)",
+        "CREATE INDEX IF NOT EXISTS idx_status        ON items(status)",
+        "CREATE INDEX IF NOT EXISTS idx_category      ON items(category)",
+        "CREATE INDEX IF NOT EXISTS idx_item_name     ON items(item_name)",
+        "CREATE INDEX IF NOT EXISTS idx_date_reported ON items(date_reported)",
     ];
     foreach ($indexes as $sql) { $conn->exec($sql); }
     echo "✓ Indexes ready.\n";
 
     // Step 5 – Insert sample data only if table is empty
-    $count = (int)$conn->query("SELECT COUNT(*) FROM lost.items")->fetchColumn();
+    $count = (int)$conn->query("SELECT COUNT(*) FROM items")->fetchColumn();
     if ($count === 0) {
         $conn->exec("
-            INSERT INTO lost.items
+            INSERT INTO items
                 (item_type, item_name, description, category, date_reported,
                  location, contact_name, contact_email, contact_phone, status)
             VALUES

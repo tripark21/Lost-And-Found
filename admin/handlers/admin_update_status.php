@@ -1,47 +1,58 @@
 <?php
 session_start();
 include __DIR__ . '/../../config/postgres_config.php';
+include __DIR__ . '/../../helpers/email_helper.php';
 
-// Only accept POST
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    header("Location: ../admin_panel.php");
-    exit;
+    header('Location: ../admin_panel.php'); exit;
 }
 
-$id     = isset($_POST['id'])     ? (int)$_POST['id']         : 0;
-$status = isset($_POST['status']) ? trim($_POST['status'])     : '';
+$id         = (int)($_POST['id']     ?? 0);
+$new_status = trim($_POST['status']  ?? '');
+$allowed    = ['unresolved', 'claimed', 'returned'];
 
-$allowed_statuses = ['unresolved', 'claimed', 'returned'];
-
-if ($id <= 0 || !in_array($status, $allowed_statuses, true)) {
-    $_SESSION['error'] = 'Invalid request.';
-    header("Location: ../admin_panel.php");
-    exit;
+if ($id <= 0 || !in_array($new_status, $allowed)) {
+    $_SESSION['error'] = '⚠️ Invalid request.';
+    header('Location: ../admin_panel.php'); exit;
 }
 
 try {
-    $stmt = $conn->prepare("
-        UPDATE items
-        SET status = :status, updated_at = NOW()
-        WHERE id = :id
-    ");
-    $stmt->execute([':status' => $status, ':id' => $id]);
+    // Fetch item first (needed for email notification)
+    $fetch = $conn->prepare("SELECT * FROM items WHERE id = :id");
+    $fetch->execute([':id' => $id]);
+    $item = $fetch->fetch();
 
+    if (!$item) {
+        $_SESSION['error'] = '⚠️ Item not found.';
+        header('Location: ../admin_panel.php'); exit;
+    }
+
+    // Update status
+    $stmt = $conn->prepare(
+        "UPDATE items SET status = :status, updated_at = NOW() WHERE id = :id"
+    );
+    $stmt->execute([':status' => $new_status, ':id' => $id]);
+
+    // Status labels for flash message
     $labels = [
-        'claimed'    => 'marked as Claimed ✅',
-        'returned'   => 'marked as Returned 🔄',
-        'unresolved' => 're-opened as Unresolved ↩️',
+        'claimed'    => '✅ Marked as Claimed',
+        'returned'   => '🔄 Marked as Returned',
+        'unresolved' => '↩️ Re-opened as Unresolved',
     ];
+    $_SESSION['success'] = ($labels[$new_status] ?? 'Status updated') . " — {$item['item_name']}";
 
-    $_SESSION['success'] = "Item #$id successfully " . $labels[$status] . ".";
+    // Send email notification (only for claimed/returned)
+    if (in_array($new_status, ['claimed', 'returned'])) {
+        $sent = sendStatusNotification($item, $new_status);
+        if ($sent) {
+            $_SESSION['success'] .= ' · 📧 Email notification sent.';
+        }
+    }
 
 } catch (PDOException $e) {
-    error_log("Status update error: " . $e->getMessage());
-    $_SESSION['error'] = 'Failed to update status. Please try again.';
+    error_log('Status update error: ' . $e->getMessage());
+    $_SESSION['error'] = '⚠️ Database error. Please try again.';
 }
 
-header("Location: ../admin_panel.php");
+header('Location: ../admin_panel.php');
 exit;
-
-$conn = null;
-?>
